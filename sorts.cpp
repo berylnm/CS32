@@ -1,11 +1,3 @@
-//
-//  main.cpp
-//  hw4_6
-//
-//  Created by Binyi Wu on 2/27/16.
-//  Copyright © 2016 Binyi Wu. All rights reserved.
-//
-
 #include <iostream>
 #include <algorithm>
 #include <numeric>  // for std::accumulate
@@ -21,97 +13,53 @@ using namespace std;
 //  you're sorting so many items that insertion_sort would take more time
 //  than you're willing to wait.
 
-const bool TEST_INSERTION_SORT =true;
-
+const bool TEST_INSERTION_SORT = true;
 //========================================================================
 
 //========================================================================
-// Timer t;                 // create a timer
-// t.start();               // start the timer
-// double d = t.elapsed();  // milliseconds since timer was last started
+// TimerType            - a type to hold a timer reading
+// TimerType getTimer() - get the current timer reading
+// double interval(TimerType start, TimerType end) - milliseconds between
+//                                                   two readings
 //========================================================================
 
-#if __cplusplus >= 201103L  // C++11
-
-#include <chrono>
-
-class Timer
-{
-public:
-    Timer()
-    {
-        start();
-    }
-    void start()
-    {
-        m_time = std::chrono::high_resolution_clock::now();
-    }
-    double elapsed() const
-    {
-        std::chrono::duration<double,std::milli> diff =
-        std::chrono::high_resolution_clock::now() - m_time;
-        return diff.count();
-    }
-private:
-    std::chrono::high_resolution_clock::time_point m_time;
-};
-
-#elif defined(_MSC_VER)  // not C++11, but Windows
+#ifdef _MSC_VER  // If we're compiling for Windows
 
 #include <windows.h>
 
-class Timer
+typedef LARGE_INTEGER TimerType;
+inline TimerType getTimer()
 {
-public:
-    Timer()
-    {
-        QueryPerformanceFrequency(&ticksPerSecond);
-        start();
-    }
-    void start()
-    {
-        QueryPerformanceCounter(&m_time);
-    }
-    double elapsed() const
-    {
-        LARGE_INTEGER now;
-        QueryPerformanceCounter(&now);
-        return (1000.0 * (now.QuadPart - m_time.QuadPart)) / ticksPerSecond.QuadPart;
-    }
-private:
-    LARGE_INTEGER m_time;
-    LARGE_INTEGER ticksPerSecond;
-};
+    LARGE_INTEGER t;
+    QueryPerformanceCounter(&t);
+    return t;
+}
 
-#else // not C++11 or Windows, so C++98
+inline double interval(TimerType start, TimerType end)
+{
+    LARGE_INTEGER ticksPerSecond;
+    QueryPerformanceFrequency(&ticksPerSecond);
+    return (1000.0 * (end.QuadPart - start.QuadPart)) / ticksPerSecond.QuadPart;
+}
+
+#else // If we're not compiling for Windows, use Standard C
 
 #include <ctime>
 
-class Timer
+typedef clock_t TimerType;
+inline TimerType getTimer() { return clock(); }
+inline double interval(TimerType start, TimerType end)
 {
-public:
-    Timer()
-    {
-        start();
-    }
-    void start()
-    {
-        m_time = std::clock();
-    }
-    double elapsed() const
-    {
-        return (1000.0 * (std::clock() - m_time)) / CLOCKS_PER_SEC;
-    }
-private:
-    std::clock_t m_time;
-};
+    return (1000.0 * (end - start)) / CLOCKS_PER_SEC;
+}
 
-#endif
+#endif  // ifdef _MSC_VER
 
 //========================================================================
 
-// Here's a class that is not cheap to copy because the objects contain
-// a large array.
+// Here's a class that is not cheap to copy -- the vector holds a pointer
+// to dynamic memory, so vector's assignment operator and copy constructor
+// have to allocate storage.
 
 // We'll simplify writing our timing tests by declaring everything public
 // in this class.  (We wouldn't make data public in a class intended for
@@ -119,230 +67,220 @@ private:
 
 typedef int IdType;
 
-const int NREADINGS = 150;
-
-struct Sensor
+struct Student
 {
     IdType id;
-    double avg;
-    double readings[NREADINGS];
-    Sensor(IdType i) : id(i)
+    double gpa;
+    vector<double> grades;
+    Student(IdType i) : id(i)
     {
-        // create random sensor readings (from 0 to 99)
-        for (size_t k = 0; k < NREADINGS; k++)
-            readings[k] = rand() % 100;
-        // (accumulate computes 0.0 + readings[0] + readings[1] + ...)
-        avg = accumulate(readings, readings + NREADINGS, 0.0) / NREADINGS;
+          // create ten random grades (from 0 to 4)
+        for (size_t k = 0; k < 10; k++)
+            grades.push_back(rand() % 5);
+          // (accumulate computes 0.0 + grades[0] + grades[1] + ...)
+        gpa = accumulate(grades.begin(), grades.end(), 0.0) / grades.size();
     }
 };
 
 inline
-bool compareSensor(const Sensor& lhs, const Sensor& rhs)
+bool compareStudent(const Student& lhs, const Student& rhs)
 {
-    // The Sensor with the higher average should come first.  If they have
-    // the same average, then the Sensor with the smaller id number should
-    // come first.  Return true iff lhs should come first.  Notice that
-    // this means that a false return means EITHER that rhs should come
-    // first, or there's a tie, so we don't care which comes first,
-    
-    if (lhs.avg > rhs.avg)
+      // The Student with the higher GPA should come first.  If they have
+      // the same GPA, then the Student with the smaller id number should
+      // come first.  Return true iff lhs should come first.  Notice that
+      // this means that a false return means EITHER that rhs should come
+      // first, or there's a tie, so we don't care which comes first,
+
+    if (lhs.gpa > rhs.gpa)
         return true;
-    if (lhs.avg < rhs.avg)
+    if (lhs.gpa < rhs.gpa)
         return false;
     return lhs.id < rhs.id;
 }
 
 inline
-bool compareSensorPtr(const Sensor* lhs, const Sensor* rhs)
+bool compareStudentPtr(const Student* lhs, const Student* rhs)
 {
-    // TODO: You implement this.  Using the same criteria as compareSensor,
-    //       compare two Sensors POINTED TO by lhs and rhs.  Think about
-    //       how you can do it in one line by calling compareSensor.
-    
-    // Just so this will compile, we'll pretend every comparison results in
-    // a tie, so there's no preferred ordering.
-    //return false;  // Delete this line and write your code instead
-    return compareSensor((*lhs), (*rhs));
+    // TODO: You implement this.  Using the same criteria as compareStudent,
+    //       compare two Students POINTED TO by lhs and rhs.  Think about
+    //	     how you can do it in one line by calling compareStudent.
+
+	return compareStudent(*lhs, *rhs);
 }
 
-bool isSorted(const vector<Sensor>& s)
+bool isSorted(const vector<Student>& s)
 {
-    // Return true iff the vector is sorted according to the ordering
-    // relationship compareSensor
-    
+      // Return true iff the vector is sorted according to the ordering
+      // relationship compareStudent
+
     for (size_t k = 1; k < s.size(); k++)
     {
-        if (compareSensor(s[k], s[k-1]))
+        if (compareStudent(s[k],s[k-1]))
             return false;
     }
     return true;
 }
 
-void insertion_sort(vector<Sensor>& s, bool comp(const Sensor&, const Sensor&))
+void insertion_sort(vector<Student>& s, bool comp(const Student&, const Student&))
 {
-    // TODO: Using the insertion sort algorithm (pp. 311-313), sort s
+    // TODO: Using the insertion sort algorithm (pp. 463-465), sort s
     //       according to the ordering relationship passed in as the
     //       parameter comp.
-    
-    // Note:  The insertion sort algorithm on pp. 312-313 of the Carrano
-    // book 6th edition is incorrect; someone made a change from the 5th
-    // edition and messed it up.  See the errata page entry for page 313 at
-    // http://homepage.cs.uri.edu/~carrano/WMcpp6e
-    
+
     // Just to show you how to use the second parameter, we'll write code
     // that sorts only a vector of 2 elements.  (This is *not* the
     // insertion sort algorithm.)
-    
+
     // Note that if comp(x,y) is true, it means x must end up before y in the
     // final ordering.
-    
-    //if (s.size() == 2  &&  comp(s[1], s[0]))
-      //  swap(s[0], s[1]);
-   /* for (int i=1; i<s.size(); i++)
-    {   int j=1;
-        while (j<=i)
-        {   if (comp(s[i],s[i-j]) && ( j==i || !comp(s[i],s[i-j-1]) ))
-            {       int k=i;
-                    while (k>i-j)
-                    {
-                        swap(s[k],s[k-1]);
-                        k--;
-                    }
-            }
-            j++;
-        }
-    }*/
-    for (int i=1; i<s.size(); i++)
-    {
-        Sensor key = s[i];
-        int j=i-1;
-        while(j>=0 && comp(key,s[j]))
-        {
-            s[j+1] = s[j];
-            j--;
-        }
-        s[j+1] =key;
-    }
-    
+  
+	//if (s.size() == 2  &&  comp(s[1], s[0]))
+        //swap(s[0], s[1]);
+
+	for(int i=1; i<s.size(); i++)
+	{
+		int j=i;
+		int k=i-1;
+
+		while(k>=0 && comp(s[j], s[k]))
+		{
+			swap(s[k], s[j]);
+			j--;
+			k--;
+		}
+	}
+
 }
 
-// Report the results of a timing test
+  // Report the results of a timing test
 
-void report(string caption, double t, const vector<Sensor>& s)
+void report(string caption, double t, const vector<Student>& s)
 {
     cout << t << " milliseconds; " << caption
-    << "; first few sensors are\n\t";
+             << "; first few students are\n\t";
     size_t n = s.size();
     if (n > 5)
         n = 5;
     for (size_t k = 0; k < n; k++)
-        cout << " (" << s[k].id << ", " << s[k].avg << ")";
+        cout << " (" << s[k].id << ", " << s[k].gpa << ")";
     cout << endl;
 }
 
 int main()
 {
-    size_t nsensors;
-    cout << "Enter number of sensors to sort: ";
-    cin >> nsensors;
-    if ( !cin  ||  nsensors <= 0)
+    size_t nstudents;
+    cout << "Enter number of students to sort: ";
+    cin >> nstudents;
+    if ( !cin  ||  nstudents <= 0)
     {
         cout << "You must enter a positive number.  Goodbye." << endl;
         return 1;
     }
-    
-    // Create a random ordering of id numbers 0 through nsensors-1
+
+      // Create a random ordering of id numbers 0 through nstudents-1
     vector<IdType> ids;
-    for (size_t j = 0; j < nsensors; j++)
+    for (size_t j = 0; j < nstudents; j++)
         ids.push_back(IdType(j));
     random_shuffle(ids.begin(), ids.end());  // from <algorithm>
     
-    // Create a bunch of Sensors
-    vector<Sensor> unorderedSensors;
+      // Create a bunch of Students
+    vector<Student> unorderedStuds;
     for (size_t k = 0; k < ids.size(); k++)
-        unorderedSensors.push_back(Sensor(ids[k]));
-    
-    // Create a timer
-    
-    Timer timer;
-    
-    // Sort the Sensors using the STL sort algorithm.  It uses a variant
-    // of quicksort called introsort.
-    
-    vector<Sensor> sensors(unorderedSensors);
-    timer.start();
-    sort(sensors.begin(), sensors.end(), compareSensor);
-    double elapsed = timer.elapsed();
-    assert(isSorted(sensors));
-    report("STL sort", elapsed, sensors);
-    
-    // Sort the already sorted array using the STL sort.  This should be
-    // fast.
-    
-    timer.start();
-    sort(sensors.begin(), sensors.end(), compareSensor);
-    elapsed = timer.elapsed();
-    assert(isSorted(sensors));
-    report("STL sort if already sorted", elapsed, sensors);
-    
+        unorderedStuds.push_back(Student(ids[k]));
+
+    TimerType startSort;
+    TimerType endSort;
+
+      // Sort the Students using the STL sort algorithm.  It uses a variant
+      // of quicksort called introsort.
+
+    vector<Student> studs(unorderedStuds);
+    startSort = getTimer();
+    sort(studs.begin(), studs.end(), compareStudent);
+    endSort = getTimer();
+    report("STL sort", interval(startSort, endSort), studs);
+    assert(isSorted(studs));
+
+      // Sort the already sorted array using the STL sort.  This should be
+      // fast.
+
+    startSort = getTimer();
+    sort(studs.begin(), studs.end(), compareStudent);
+    endSort = getTimer();
+    report("STL sort if already sorted", interval(startSort, endSort), studs);
+    assert(isSorted(studs));
+
     if (TEST_INSERTION_SORT)
     {
-        // Sort the original unsorted array using insertion sort.  This
-        // should be really slow.  If you have to wait more than a minute,
-        // try rerunning the program with a smaller number of Sensors.
-        
-        sensors = unorderedSensors;
-        timer.start();
-        insertion_sort(sensors, compareSensor);
-        elapsed = timer.elapsed();
-        assert(isSorted(sensors));
-        report("insertion sort if not already sorted", elapsed, sensors);
-        
-        // Sort the already sorted array using insertion sort.  This should
-        // be fast.
-        
-        timer.start();
-        insertion_sort(sensors, compareSensor);
-        elapsed = timer.elapsed();
-        assert(isSorted(sensors));
-        report("insertion sort if already sorted", elapsed, sensors);
+          // Sort the original unsorted array using insertion sort.  This
+          // should be really slow.  If you have to wait more than a minute,
+          // try rerunning the program with a smaller number of Students.
+
+        studs = unorderedStuds;
+        startSort = getTimer();
+        insertion_sort(studs, compareStudent);
+        endSort = getTimer();
+        report("insertion sort if not already sorted",
+                                         interval(startSort, endSort), studs);
+        assert(isSorted(studs));
+
+          // Sort the already sorted array using insertion sort.  This should
+          // be fast.
+
+        startSort = getTimer();
+        insertion_sort(studs, compareStudent);
+        endSort = getTimer();
+        report("insertion sort if already sorted",
+                                         interval(startSort, endSort), studs);
+        assert(isSorted(studs));
     }
-    
-    // Since Sensors are expensive to copy, and since the STL's sort copies
-    // Sensors O(N log N) times, let's sort POINTERS to the Sensors, then
-    // make one final pass to rearrange the Sensors according to the
-    // reordered pointers.  We'll write some code; you write the rest.
-    
-    // Set sensors to the original unsorted sequence
-    sensors = unorderedSensors;
-    
-    // Start the timing
-    timer.start();
-    
-    // Create an auxiliary copy of sensors, to faciliate the later reordering.
-    // We create it in a local scope so that we also account for the
-    // destruction time.
+
+      // Since Students are expensive to copy, and since the STL's sort copies
+      // Students O(N log N) times, let's sort POINTERS to the Students, then
+      // make one final pass to rearrange the Students according to the
+      // reordered pointers.  We'll write some code; you write the rest.
+
+      // Set studs to the original unsorted sequence
+    studs = unorderedStuds;
+
+      // Start the timing
+    startSort = getTimer();
+
+      // Create an auxiliary copy of studs, to faciliate the later reordering.
+      // We create it in a local scope, so we also account for the destruction
+      // time.
     {
-        vector<Sensor> auxSensors(sensors);
-        
-        // TODO:  Create a vector of Sensor pointers, and set each pointer
-        //        to point to the corresponding Sensor in auxSensors.
-        vector<Sensor*>sen;
-        for (int i=0; i<auxSensors.size();i++)
-        {
-            sen.push_back(&(auxSensors[i]));
-        }
-        // TODO:  Sort the vector of pointers using the STL sort algorithm
-        //        with compareSensorPtr as the ordering relationship.
-        sort(sen.begin(),sen.end(),compareSensorPtr);
-        // TODO:  Using the now-sorted vector of pointers, replace each Sensor
-        //        in sensors with the Sensors from auxSensors in the correct order.
-        for (int i=0; i<sensors.size(); i++)
-            sensors[i] = *(sen[i]);
-    } // auxSensors will be destroyed here
+     vector<Student> auxStuds(studs);
+
+      // TODO:  Create a vector of Student pointers, and set each pointer
+      //        to point to the corresponding Student in auxStuds.
+	 vector<Student*> studPointers;
+	 for(int i=0; i<studs.size(); i++)
+	 {
+		//Student* temp = new Student(auxStuds.at(i));
+		 Student* temp = &(auxStuds.at(i));
+		studPointers.push_back(temp);
+	 }
     
-    // Report the timing and verify that the sort worked
-    elapsed = timer.elapsed();
-    assert(isSorted(sensors));
-    report("STL sort of pointers", elapsed, sensors);
+      // TODO:  Sort the vector of pointers using the STL sort algorithm
+      //        with compareStudentPtr as the ordering relationship.
+
+    sort(studPointers.begin(), studPointers.end(), compareStudentPtr);
+
+      // TODO:  Using the now-sorted vector of pointers, replace each Student
+      //	in studs with the Students from auxStuds in the correct order.
+
+	for(int i=0; i<studs.size(); i++)
+	{
+		studs.at(i)=*studPointers.at(i);
+		//studs.at(i)=auxStuds.at(i);
+	}
+
+
+    } // auxStuds will be destroyed here
+
+      // End the timing, report, and verify the sort worked
+    endSort = getTimer();
+    report("STL sort of pointers", interval(startSort, endSort), studs);
+    assert(isSorted(studs));
 }
