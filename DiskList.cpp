@@ -13,78 +13,81 @@ DiskList::DiskList(const std::string& filename)
 {
     fn = filename;
     b.createNew(filename);
-    b.write(0,0);
+    char c = ' ';
+    b.write(DiskNode(&c,0),0);
     b.close();
 }
 
 bool DiskList::push_front(const char* data)
 {
-    b.openExisting(fn);
+    if (!b.openExisting(fn))
+    {   cout<<"Warning: File does not exist<<endl;"<<endl;
+        return false;
+    }
     if (strlen(data) >= 256)
         return false;
     int n = b.fileLength();
-    int length = strlen(data);
-    b.write(data, length,n);
-    b.write(length,b.fileLength());
-    b.write(n,b.fileLength());
+    char* temp= new char[strlen(data)+1];
+    DiskNode D = DiskNode("", 0);
+    DiskNode head = DiskNode("",0);
+    b.read(head,0);
+    strcpy(temp,data);
+    temp[strlen(data)] = '\0';
+    b.write(DiskNode(temp,head.next),n);
+    b.write(DiskNode(head.data,n),0);
     b.close();
     return true;
 }
 bool DiskList::remove(const char* data)
-{   b.openExisting(fn);
-    int sign = 0;
-    int n = b.fileLength();
-    n=n-4;
-    while (n>=4)
-    {
-        int k,j;
-        b.read(k,n);
-        b.read(j,n-4);
-        char* a = new char[j+1];
-        if (!b.read(a,j,k))
-            return false;
-        else
-        {
-            if (strcmp(a,data)!=0)
-            {
-                n=k-4;
-                continue;
-            }
-            else
-            {
-                int temp;
-                b.read(temp,k-4);
-                b.write(temp,n);
-                b.read(temp,k-8);
-                b.write(temp,n-4);
-                sign = 1;
-            }
-        }
-        
+{
+    if (!b.openExisting(fn))
+    {   cout<<"Warning: File does not exist<<endl;"<<endl;
+        return false;
     }
+    int sign = 0;
+    BinaryFile::Offset prev = 0;
+    DiskNode current = DiskNode("",0);
+    b.read(current,0);
+    while(current.next!=0)
+    {
+        DiskNode nt = DiskNode("",0);
+        b.read(nt,current.next);
+        if (strcmp(nt.data,data)!=0)
+        {
+            prev = current.next;
+            current = nt;
+            
+        }
+        else
+        {   b.write(DiskNode(current.data,nt.next),prev);
+            prev = current.next;
+            b.read(current,current.next);
+            sign = 1;
+        }
+    }
+
     b.close();
     return sign;
 }
 void DiskList::printAll()
 {
-    b.openExisting(fn);
-    int n = b.fileLength();
-    n=n-4;
-    while (n>=4)
-    {
-        int k,j;
-        b.read(k,n);
-        b.read(j,n-4);
-        char* a = new char[j];
-        if (!b.read(a,j,k))
-           cout<<"Error: undefined behavior"<<endl;
-        else
-            for (int c = 0; c<j; c++)
-            {
-                cout<<a[c];
-            }
-        cout<<endl;
-        n = k-4;
+    if (!b.openExisting(fn))
+    {   cout<<"Warning: File does not exist<<endl;"<<endl;
+        return;
     }
+
+    DiskNode d = DiskNode("",0);
+    b.read(d,0);
+    while (d.next != 0)
+    {   b.read(d,d.next);
+        int i=0;
+        while (d.data[i] != '\0')
+        {    cout<<d.data[i];
+            i++;
+        }
+        cout<<endl;
+    }
+    
+    
     b.close();
 }
